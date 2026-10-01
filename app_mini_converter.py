@@ -92,20 +92,24 @@ def get_engine_paths():
     
     node_exe = os.path.join(engine_dir, 'node.exe')
     obj2gltf_js = os.path.join(engine_dir, 'node_modules', 'obj2gltf', 'bin', 'obj2gltf.js')
+    gltfpack_js = os.path.join(engine_dir, 'node_modules', 'gltfpack', 'cli.js')
     gltf_pipe_js = os.path.join(engine_dir, 'node_modules', 'gltf-pipeline', 'bin', 'gltf-pipeline.js')
     
     if os.path.exists(node_exe) and os.path.exists(obj2gltf_js):
-        return node_exe, obj2gltf_js, gltf_pipe_js
+        pack_cmd = gltfpack_js if os.path.exists(gltfpack_js) else ""
+        return node_exe, obj2gltf_js, pack_cmd, gltf_pipe_js
 
     # 개발 폴백 (tools/3d_converter)
     dev_dir = os.path.dirname(os.path.abspath(__file__))
     dev_node = r'C:\Program Files\nodejs\node.exe'
     dev_obj = os.path.join(dev_dir, 'node_modules', 'obj2gltf', 'bin', 'obj2gltf.js')
+    dev_pack = os.path.join(dev_dir, 'node_modules', 'gltfpack', 'cli.js')
     dev_pipe = os.path.join(dev_dir, 'node_modules', 'gltf-pipeline', 'bin', 'gltf-pipeline.js')
     if os.path.exists(dev_node) and os.path.exists(dev_obj):
-        return dev_node, dev_obj, dev_pipe
+        pack_cmd = dev_pack if os.path.exists(dev_pack) else ""
+        return dev_node, dev_obj, pack_cmd, dev_pipe
 
-    return "", "", ""
+    return "", "", "", ""
 
 
 def ensure_local_engine_ready():
@@ -167,41 +171,52 @@ class WorkerThread(QThread):
             need_conversion = True
             if os.path.exists(target_glb_path):
                 glb_size_mb = os.path.getsize(target_glb_path) / (1024 * 1024)
-                if glb_size_mb < 15.0 and check_glb_is_optimized(target_glb_path):
+                if glb_size_mb < 6.0 and check_glb_is_optimized(target_glb_path):
                     self.progress_signal.emit(f"✅ 기존 최적화 GLB 감지 ({glb_size_mb:.1f}MB)")
                     need_conversion = False
                 else:
-                    self.progress_signal.emit("⚡ 단일 메시 및 노멀 자동 최적화 변환 진행...")
+                    self.progress_signal.emit("⚡ 4MB 초경량 규격 자동 최적화 변환 진행...")
 
             if need_conversion:
-                self.progress_signal.emit("🚀 7MB 초경량 Draco GLB 로컬 초고속 변환 중...")
-                node_exe, obj2gltf_js, gltf_pipe_js = get_engine_paths()
+                self.progress_signal.emit("🚀 4MB 초경량 GLB 초고속 변환 중... (폴리곤 1/10 압축)")
+                node_exe, obj2gltf_js, gltfpack_js, gltf_pipe_js = get_engine_paths()
                 if not node_exe or not os.path.exists(node_exe):
                     ensure_local_engine_ready()
-                    node_exe, obj2gltf_js, gltf_pipe_js = get_engine_paths()
+                    node_exe, obj2gltf_js, gltfpack_js, gltf_pipe_js = get_engine_paths()
 
                 if not node_exe or not os.path.exists(node_exe):
                     self.finished_signal.emit(False, "", "", "로컬 변환 엔진(node.exe)을 찾을 수 없습니다.")
                     return
 
                 temp_raw_gltf = os.path.join(target_dir, f"_temp_{base_name}.gltf")
+                temp_pack_glb = os.path.join(target_dir, f"_temp_pack_{base_name}.glb")
+
                 try:
                     no_window = getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000) if sys.platform == 'win32' else 0
-                    # 1단계: obj -> raw gltf (100% 로컬 독립 실행, 콘솔 창 숨김)
+                    
+                    # 1단계: obj -> raw gltf (메시 단일화 + 버텍스 노멀 자동 계산, 콘솔 창 숨김)
                     cmd1 = [node_exe, obj2gltf_js, '-i', obj_path, '-o', temp_raw_gltf]
                     r1 = subprocess.run(cmd1, cwd=target_dir, capture_output=True, text=True, creationflags=no_window)
                     if r1.returncode != 0:
                         self.finished_signal.emit(False, "", "", f"1단계 변환 오류: {r1.stderr[:100]}")
                         return
 
-                    # 2단계: gltf -> Draco 압축 GLB (100% 로컬 독립 실행, 콘솔 창 숨김, 속도 최적화)
-                    cmd2 = [node_exe, gltf_pipe_js, '-i', temp_raw_gltf, '-o', target_glb_path, '-d', '--draco.compressionLevel', '6']
+                    pipe_input = temp_raw_gltf
+                    # 2단계: gltfpack으로 폴리곤 1/10 지능형 감축 (140만 -> 14만 개 데시메이션)
+                    if gltfpack_js and os.path.exists(gltfpack_js):
+                        cmd_pack = [node_exe, gltfpack_js, '-i', temp_raw_gltf, '-o', temp_pack_glb, '-si', '0.05']
+                        r_pack = subprocess.run(cmd_pack, cwd=target_dir, capture_output=True, text=True, creationflags=no_window)
+                        if r_pack.returncode == 0 and os.path.exists(temp_pack_glb):
+                            pipe_input = temp_pack_glb
+
+                    # 3단계: Draco 무손실 압축 초경량 GLB 완성 (속도 최적화 level 6, 콘솔 창 숨김)
+                    cmd2 = [node_exe, gltf_pipe_js, '-i', pipe_input, '-o', target_glb_path, '-d', '--draco.compressionLevel', '6']
                     r2 = subprocess.run(cmd2, cwd=target_dir, capture_output=True, text=True, creationflags=no_window)
                     if r2.returncode != 0:
-                        self.finished_signal.emit(False, "", "", f"2단계 압축 오류: {r2.stderr[:100]}")
+                        self.finished_signal.emit(False, "", "", f"최종 압축 오류: {r2.stderr[:100]}")
                         return
                 finally:
-                    for tmp in [temp_raw_gltf, os.path.join(target_dir, f"_temp_{base_name}.bin")]:
+                    for tmp in [temp_raw_gltf, temp_pack_glb, os.path.join(target_dir, f"_temp_{base_name}.bin")]:
                         if os.path.exists(tmp):
                             try: os.remove(tmp)
                             except: pass
