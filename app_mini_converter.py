@@ -279,8 +279,12 @@ class UpdateCheckerThread(QThread):
                         except Exception:
                             pass
 
+                    def parse_ver(v_str):
+                        try: return [int(x) for x in str(v_str).strip().split('.')]
+                        except: return [0, 0, 0]
+
                     # 원격 버전이 더 최신인 경우 패치 파일 자동 다운로드 및 교체
-                    if remote_ver > local_ver:
+                    if parse_ver(remote_ver) > parse_ver(local_ver):
                         patches = remote_info.get("patches", [])
                         success_count = 0
                         for p in patches:
