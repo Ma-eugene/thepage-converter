@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['c:/Users/ma/Desktop/web/tools/3d_converter/app_mini_converter.py'],
+    ['app_mini_converter.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('engine.zip', '.'), ('app_icon.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -19,27 +19,21 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='ThePage3D',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['c:/Users/ma/Desktop/web/tools/3d_converter/app_icon.ico'],
-)
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='ThePage3D',
+    icon=['app_icon.ico'],
 )

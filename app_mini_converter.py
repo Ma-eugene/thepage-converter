@@ -120,16 +120,24 @@ def ensure_local_engine_ready():
         node_in_engine = os.path.join(engine_dir, 'node.exe')
         obj2gltf_js = os.path.join(engine_dir, 'node_modules', 'obj2gltf', 'bin', 'obj2gltf.js')
         if not (os.path.exists(node_in_engine) and os.path.exists(obj2gltf_js)):
-            base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-            engine_zip = os.path.join(base_dir, 'engine.zip')
-            if not os.path.exists(engine_zip):
-                engine_zip = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'engine.zip')
-            if os.path.exists(engine_zip):
+            possible_zip_paths = [
+                os.path.join(getattr(sys, '_MEIPASS', ''), 'engine.zip'),
+                os.path.join(os.path.dirname(sys.executable), 'engine.zip'),
+                os.path.join(install_dir, 'engine.zip'),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), 'engine.zip'),
+            ]
+            engine_zip = None
+            for p in possible_zip_paths:
+                if p and os.path.exists(p):
+                    engine_zip = p
+                    break
+            if engine_zip and os.path.exists(engine_zip):
                 os.makedirs(engine_dir, exist_ok=True)
                 with zipfile.ZipFile(engine_zip, 'r') as zf:
                     zf.extractall(engine_dir)
-    except Exception:
-        pass
+                log_debug(f"ensure_local_engine_ready: extracted from {engine_zip}")
+    except Exception as e:
+        log_debug(f"ensure_local_engine_ready error: {e}")
 
 
 class WorkerThread(QThread):
@@ -772,14 +780,35 @@ def run_self_installer_if_needed():
         obj2gltf_js = os.path.join(engine_dir, 'node_modules', 'obj2gltf', 'bin', 'obj2gltf.js')
         if not (os.path.exists(node_in_engine) and os.path.exists(obj2gltf_js)):
             log_debug("Extracting local engine to " + engine_dir)
-            engine_zip_src = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(current_exe)), 'engine.zip')
-            if not os.path.exists(engine_zip_src):
-                engine_zip_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'engine.zip')
-            if os.path.exists(engine_zip_src):
-                os.makedirs(engine_dir, exist_ok=True)
-                with zipfile.ZipFile(engine_zip_src, 'r') as zf:
-                    zf.extractall(engine_dir)
-                log_debug("Local engine extracted successfully.")
+            # 3-1. 외부 폴더에 이미 풀려있는 engine/ 이 있는지 확인
+            ext_engine_dir = os.path.join(os.path.dirname(current_exe), 'engine')
+            if os.path.exists(os.path.join(ext_engine_dir, 'node.exe')):
+                try:
+                    shutil.copytree(ext_engine_dir, engine_dir, dirs_exist_ok=True)
+                    log_debug("Copied engine folder directly from external directory.")
+                except Exception as ce:
+                    log_debug(f"Direct engine copy warning: {ce}")
+
+            # 3-2. engine.zip 경로 탐색 및 압축 해제
+            if not (os.path.exists(node_in_engine) and os.path.exists(obj2gltf_js)):
+                possible_zip_paths = [
+                    os.path.join(getattr(sys, '_MEIPASS', ''), 'engine.zip'),
+                    os.path.join(os.path.dirname(current_exe), 'engine.zip'),
+                    os.path.join(install_dir, 'engine.zip'),
+                    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'engine.zip'),
+                ]
+                engine_zip_src = None
+                for p in possible_zip_paths:
+                    if p and os.path.exists(p):
+                        engine_zip_src = p
+                        break
+                if engine_zip_src and os.path.exists(engine_zip_src):
+                    os.makedirs(engine_dir, exist_ok=True)
+                    with zipfile.ZipFile(engine_zip_src, 'r') as zf:
+                        zf.extractall(engine_dir)
+                    log_debug(f"Local engine extracted successfully from {engine_zip_src}.")
+                else:
+                    log_debug(f"Local engine zip NOT FOUND. Checked: {possible_zip_paths}")
 
         # 4. 바탕화면 및 시작메뉴 바로가기 생성
         log_debug("Creating desktop & start menu shortcuts...")
