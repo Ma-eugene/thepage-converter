@@ -1,0 +1,11 @@
+{
+  "version": "1.1.0",
+  "release_date": "2026-10-01",
+  "description": "메시 단일 병합 및 노멀 자동 계산 적용 (구멍 뚫림 방지, 85% 다이어트), 검은 콘솔창 숨김, 변환 속도 최적화",
+  "patches": [
+    {
+      "target_rel_path": "engine/node_modules/obj2gltf/lib/loadObj.js",
+      "url": "https://raw.githubusercontent.com/maeugene88/thepage-converter/main/patch/loadObj.js"
+    }
+  ]
+}
