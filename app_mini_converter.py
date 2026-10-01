@@ -262,8 +262,8 @@ class UpdateCheckerThread(QThread):
     def run(self):
         try:
             import urllib.request
-            url = "https://raw.githubusercontent.com/maeugene88/thepage-converter/main/version.json"
-            req = urllib.request.Request(url, headers={'User-Agent': 'ThePage3D-Converter/1.1'})
+            url = "https://raw.githubusercontent.com/Ma-eugene/thepage-converter/main/version.json"
+            req = urllib.request.Request(url, headers={'User-Agent': 'ThePage3D-Converter/1.2'})
             with urllib.request.urlopen(req, timeout=3) as resp:
                 if resp.status == 200:
                     remote_info = json.loads(resp.read().decode('utf-8'))

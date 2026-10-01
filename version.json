@@ -5,7 +5,7 @@
   "patches": [
     {
       "target_rel_path": "engine/node_modules/obj2gltf/lib/loadObj.js",
-      "url": "https://raw.githubusercontent.com/maeugene88/thepage-converter/main/patch/loadObj.js"
+      "url": "https://raw.githubusercontent.com/Ma-eugene/thepage-converter/main/patch/loadObj.js"
     }
   ]
 }
